@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Flappy</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #fff; overflow: hidden; }
+  canvas { display: block; margin: 0 auto; touch-action: none; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script>
+const W = 400, H = 600;
+const c = document.getElementById('c');
+const ctx = c.getContext('2d');
+
+function resize() {
+  const s = Math.min(innerWidth / W, innerHeight / H);
+  c.style.width = W * s + 'px';
+  c.style.height = H * s + 'px';
+  c.width = W * devicePixelRatio;
+  c.height = H * devicePixelRatio;
+  ctx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
+}
+addEventListener('resize', resize);
+resize();
+
+const R = 10, GRAVITY = 1400, JUMP = -420;
+const WALL_W = 50, GAP = 150, SPEED = 160, SPACING = 220;
+
+let ball, walls, score, best = 0, state;
+
+function reset() {
+  ball = { x: 100, y: H / 2, vy: 0 };
+  walls = [];
+  score = 0;
+  state = 'ready';
+}
+
+function addWall(x) {
+  const top = 60 + Math.random() * (H - GAP - 120);
+  walls.push({ x, top, passed: false });
+}
+
+function flap() {
+  if (state === 'over') { reset(); return; }
+  if (state === 'ready') { state = 'play'; addWall(W + 50); }
+  ball.vy = JUMP;
+}
+
+addEventListener('keydown', e => {
+  if (e.code === 'Space' || e.code === 'ArrowUp') { e.preventDefault(); flap(); }
+});
+addEventListener('pointerdown', e => { e.preventDefault(); flap(); });
+
+function update(dt) {
+  if (state !== 'play') return;
+
+  ball.vy += GRAVITY * dt;
+  ball.y += ball.vy * dt;
+
+  for (const w of walls) w.x -= SPEED * dt;
+  if (walls.length && walls[walls.length - 1].x < W - SPACING) addWall(W);
+  if (walls.length && walls[0].x + WALL_W < 0) walls.shift();
+
+  if (ball.y + R > H || ball.y - R < 0) return die();
+
+  for (const w of walls) {
+    // choque circulo-rectangulo contra la pared de arriba y la de abajo
+    if (hit(w.x, 0, WALL_W, w.top) || hit(w.x, w.top + GAP, WALL_W, H)) return die();
+    if (!w.passed && w.x + WALL_W < ball.x) { w.passed = true; score++; }
+  }
+}
+
+function hit(x, y, w, h) {
+  const nx = Math.max(x, Math.min(ball.x, x + w));
+  const ny = Math.max(y, Math.min(ball.y, y + h));
+  return (ball.x - nx) ** 2 + (ball.y - ny) ** 2 < R * R;
+}
+
+function die() {
+  state = 'over';
+  best = Math.max(best, score);
+}
+
+function draw() {
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(0, 0, W, H);
+
+  ctx.fillStyle = '#000';
+  for (const w of walls) {
+    ctx.fillRect(w.x, 0, WALL_W, w.top);
+    ctx.fillRect(w.x, w.top + GAP, WALL_W, H - w.top - GAP);
+  }
+
+  ctx.beginPath();
+  ctx.arc(ball.x, ball.y, R, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.textAlign = 'center';
+  ctx.font = '32px monospace';
+  ctx.fillText(score, W / 2, 50);
+
+  ctx.font = '16px monospace';
+  if (state === 'ready') ctx.fillText('click / espacio', W / 2, H / 2 + 60);
+  if (state === 'over') {
+    ctx.fillText('perdiste  ·  mejor: ' + best, W / 2, H / 2 - 30);
+    ctx.fillText('click para reintentar', W / 2, H / 2 + 60);
+  }
+}
+
+let last = performance.now();
+function loop(now) {
+  const dt = Math.min((now - last) / 1000, 1 / 30);
+  last = now;
+  update(dt);
+  draw();
+  requestAnimationFrame(loop);
+}
+
+reset();
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
